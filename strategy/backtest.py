@@ -1,6 +1,6 @@
 from os import environ
 from pymongo import MongoClient
-from strategy.stockdata import get_data, db_get_recent_open, get_next_trading_day
+from strategy.stockdata import get_data, recent_open, next_trading_day, update_trading_days, DataError
 
 
 client = MongoClient(environ['MONGO'])
@@ -20,16 +20,19 @@ def calculate_weights(holdings, total):
 
 def value_to_weight(largest_holdings, all_holdings):
     raw_values = {holding: all_holdings[holding] for holding in largest_holdings}
-    by_ticker = {cusip_to_ticker(cusip): value for cusip, value in raw_values.items() if cusip_to_ticker(cusip) is not None}
+    by_ticker = {cusip_to_ticker(cusip): value
+                 for cusip, value in raw_values.items() if cusip_to_ticker(cusip) is not None}
     return calculate_weights(by_ticker, sum(by_ticker.values()))
 
 
-def db_get_forms(cik, min_year):
+def db_get_forms(cik, min_date):
     db = client.form13f
     forms = db.forms.find({'cik': cik})
     form_names = []
     portfolio_date = {}
     for form13f in forms:
+        if form13f['date'] < min_date:
+            continue
         form_names.append(form13f['sec_id'])
         portfolio_date[form13f['sec_id']] = form13f['date']
     return form_names, portfolio_date
@@ -62,27 +65,32 @@ def ensure_valid_data(form_name, form_date, next_date, cik, num_stocks):
 
 def get_values(portfolio, next_weight, date):
     db = client.form13f
-    data = db.stockdata.find_one({'date': get_next_trading_day(date, db)})
-    holdings = list(portfolio.keys())
-    holdings.extend([holding for holding in next_weight.keys()])
-    holdings.remove('cash')
+    tickers = list(portfolio.keys())
+    next_tickers = [ticker for ticker in next_weight.keys()]
+    tickers.extend(next_tickers)
+    tickers.remove('cash')
     portfolio_value = {'cash': portfolio['cash']}
     prices = {'cash': 1}
-    for holding in holdings:
-        try:
-            open_price = data['data'][holding]['open']
-        except KeyError:
-            open_price = db_get_recent_open(holding, date, db)
-            if open_price is None:
-                raise KeyError("Cannot backtest further (unknown sale price for '" + holding + "').")
-        if holding in portfolio:
-            portfolio_value[holding] = portfolio[holding] * float(open_price)
-        prices[holding] = float(open_price)
+    for ticker in tickers:
+        data = db.stockdata.find_one({'$and': [{'name': ticker}, {'history.' + date: {"$exists": True}}]})
+        if data is not None:
+            open_price = data['history'][date]['open']
+        elif ticker in next_tickers:        # Current price is required for all next tickers but not current
+            raise DataError("Cannot backtest further (unknown buy price for '" + ticker + "').")
+        else:
+            open_price = recent_open(ticker, date, db)
+
+        if open_price is None:              # Need at least a price from some time in the past for current tickers
+            raise DataError("Cannot backtest further (unknown sale price for '" + ticker + "').")
+        if ticker in portfolio:
+            portfolio_value[ticker] = portfolio[ticker] * float(open_price)
+        prices[ticker] = float(open_price)
     return portfolio_value, prices
 
 
 def compare_weights(current, next_weight):
-    d_next = {ticker: value - (0 if current.get(ticker) is None else current.get(ticker)) for ticker, value in next_weight.items()}
+    d_next = {ticker: value - (0 if current.get(ticker) is None else current.get(ticker))
+              for ticker, value in next_weight.items()}
     delta = {ticker: value * -1 for ticker, value in current.items()}
     delta.update(d_next)
     return delta
@@ -114,16 +122,19 @@ def rebalance(portfolio, next_weight, date):
     return buy_sell(portfolio, prices, delta, total)
 
 
-def backtest(cik, min_year, num_stocks, initial_bank):
-    forms, form_dates = db_get_forms(cik, min_year)
+def backtest(cik, min_date, num_stocks, initial_bank):
+    update_trading_days()
+    forms, form_dates = db_get_forms(cik, min_date)
+    db = client.form13f
+    trading_dates = {sec_id: next_trading_day(date, db) for sec_id, date in form_dates.items()}
     to_backtest = sorted(forms)
     portfolio = {"cash": initial_bank}
     for form in to_backtest:
         next_date_index = to_backtest.index(form) + 1
         next_date = to_backtest[next_date_index] if len(to_backtest) > next_date_index else None
-        weights = ensure_valid_data(form, form_dates[form], form_dates.get(next_date), cik, num_stocks)
-        portfolio = rebalance(portfolio, weights, form_dates[form])
+        weights = ensure_valid_data(form, trading_dates[form], trading_dates.get(next_date), cik, num_stocks)
+        portfolio = rebalance(portfolio, weights, trading_dates[form])
         print(portfolio)
 
 
-backtest("0001037389", "", 30, 10000)
+backtest("0001037389", "2014-01-01", 30, 10000)

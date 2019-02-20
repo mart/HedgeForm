@@ -16,8 +16,7 @@ class Form13F:
 
 
 class WebScrapeError(RuntimeError):
-    def __init__(self, message):
-        super().__init__(message)
+    pass
 
 
 def get_holdings(link):
