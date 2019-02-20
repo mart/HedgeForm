@@ -10,7 +10,6 @@ class Form13F:
         self.sec_id = sec_id
         self.date = date
         self.link = link
-        # cusip: value
         self.holdings = holdings
         self.total_val = sum(self.holdings.values())
 
@@ -43,17 +42,25 @@ def get_link_and_date(filing_link):
 
 
 def update_filings(cik, count=20):
+    if count > 40:
+        raise ValueError("Cannot get more than 40 filings - XML data may not be available that far backz")
     client = MongoClient(environ['MONGO'])
     db = client.form13f
     company_url = "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=" + \
                   cik + "&type=13F&dateb=&owner=include&count=" + str(count)
     soup = BeautifulSoup(requests.get(company_url).content, "html.parser")
-    filing_links = soup("a", id="documentsbutton")[:count]
+    filing_links = soup("a", id="documentsbutton")
+    added = 0
     for filing in filing_links:
-        sec_id = filing.get("href").split("/")[5]
+        if added == count:
+            break
+        if '[Amend]' in str(filing.parent.parent):
+            continue
+        sec_id = filing.get('href').split("/")[5]
         if not already_in_db(sec_id, db):
             link, date = get_link_and_date(filing.get("href"))
             holdings = get_holdings(link)
             form = Form13F(cik, sec_id, date, link, holdings)
             db.forms.insert_one(form.__dict__)
             print("Added form: " + sec_id + " for " + cik)
+        added += 1

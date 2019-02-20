@@ -49,10 +49,12 @@ def ensure_valid_data(form_name, form_date, next_date, cik, num_stocks):
     weights = {}
     failed = []
     while len(weights) < num_stocks:
-        if len(failed) > num_stocks:
-            raise RuntimeError("Something's wrong; data retrieval failed for maximum number of tickers: " + num_stocks)
         num_stocks_new = num_stocks + len(failed)
         largest, all_holdings = db_get_form_holdings(form_name, cik, num_stocks_new, db)
+        if len(failed) > num_stocks:
+            raise RuntimeError("Something's wrong; data retrieval failed for maximum number of tickers: " + num_stocks)
+        if len(all_holdings) < num_stocks:
+            raise RuntimeError("This filing has " + str(len(all_holdings)) + " stocks, but asked for " + num_stocks_new)
         tickers = [cusip_to_ticker(cusip) for cusip in largest if cusip_to_ticker(cusip) not in failed]
         failed.extend(get_data(list(tickers), form_date))
         successful = [cusip for cusip in largest if cusip_to_ticker(cusip) not in failed]
@@ -136,5 +138,3 @@ def backtest(cik, min_date, num_stocks, initial_bank):
         portfolio = rebalance(portfolio, weights, trading_dates[form])
         print(portfolio)
 
-
-backtest("0001037389", "2014-01-01", 30, 10000)
