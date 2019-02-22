@@ -1,0 +1,31 @@
+{% extends "layout.html" %}
+{% block nav_home %}active{% endblock %}
+{% block content %}
+    <div class="container">
+        <h2 class="mt-5">Institutional investors</h2>
+        <table id="table13f" class="display nowrap table table-hover table-sm">
+            <thead>
+            <tr>
+                <th scope="col" class="text-center">Company</th>
+                <th scope="col" class="text-center">Last 13F filing</th>
+                <th scope="col" class="text-center">Total value</th>
+                <th scope="col" class="text-center">Gain (Loss)</th>
+                <th scope="col" class="text-center">Number of holdings</th>
+                <th scope="col" class="text-center">Turnover</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for form in data %}
+                <tr>
+                    <th scope="row">{{ form.name|e }}</th>
+                    <td>{{ form.date }}</td>
+                    <td class="text-right">$ {{ form.total_val }}</td>
+                    <td class="text-right">TODO</td>
+                    <td class="text-right">{{ form.num_holdings }}</td>
+                    <td class="text-right">TODO</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endblock %}

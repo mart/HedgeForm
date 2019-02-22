@@ -1,0 +1,49 @@
+
+main {
+    font-family: "Source Sans Pro", sans-serif;
+}
+
+
+main > .container {
+    padding: 60px 15px 0;
+}
+
+.footer {
+    background-color: rgba(70, 130, 180, 0.15);
+}
+
+.footer > .container {
+    padding-right: 15px;
+    padding-left: 15px;
+}
+
+.navbar-expand-md {
+    box-shadow: 0 2px 4px 0 #808080;
+}
+
+.form-control:focus {
+    border-color: rgba(128, 128, 128, 0.65);
+    box-shadow: 0 0 3px 2px rgba(128, 128, 128, 0.65);
+}
+
+.btn {
+    border-color: rgba(128, 128, 128, 0.65);
+}
+
+.table-hover > tbody > tr:hover{
+    background-color: rgba(70, 130, 180, 0.15) !important;
+}
+
+.table-hover {
+    white-space: nowrap;
+    width: 100% !important;
+}
+
+.table-hover > thead > tr > th::before,
+.table-hover > thead > tr > th::after {
+    font-family: "Helvetica Neue", HelveticaNeue, Helvetica, Arial, sans-serif !important;
+}
+
+.dropdown-item:hover {
+    background-color: rgba(70, 130, 180, 0.15);
+}

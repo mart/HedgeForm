@@ -17,10 +17,10 @@ def update_cusip_map():
 
 
 def parse_fail_filing(file):
-    cusip_map = {}
+    file_map = {}
     for line in file:
         col = line.split('|')
         if len(col) > 2:
-            cusip_map[col[1]] = col[2].replace("XXXX", "").replace("ZZZZ", "")
-    del cusip_map['CUSIP']
-    return cusip_map
+            file_map[col[1]] = col[2].replace("XXXX", "").replace("ZZZZ", "")
+    del file_map['CUSIP']
+    return file_map
