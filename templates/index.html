@@ -20,7 +20,7 @@
                     <th scope="row">{{ form.name|e }}</th>
                     <td>{{ form.date }}</td>
                     <td class="text-right">$ {{ form.total_val }}</td>
-                    <td class="text-right">TODO</td>
+                    <td class="text-right {{ form.gain_class }}">$ {{ form.gain }}</td>
                     <td class="text-right">{{ form.num_holdings }}</td>
                     <td class="text-right">TODO</td>
                 </tr>

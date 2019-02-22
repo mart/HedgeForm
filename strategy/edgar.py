@@ -4,6 +4,9 @@ from bs4 import BeautifulSoup
 from pymongo import MongoClient
 
 
+client = MongoClient(environ['MONGO'])
+
+
 class Form13F:
     def __init__(self, cik, sec_id, name, date, link, holdings):
         self.cik = cik
@@ -12,26 +15,83 @@ class Form13F:
         self.date = date
         self.link = link
         self.holdings = holdings
-        self.total_val = sum(self.holdings.values())
-        self.gain = self.gain()
+        self.share_val = sum(self.holdings['shares'].values())
+        self.total_val = \
+            sum(self.holdings['shares'].values()) + \
+            sum(self.holdings['puts'].values()) + \
+            sum(self.holdings['calls'].values())
+        self.gain = False
 
-    def gain(self):
-        return 0
 
-    def turnover(self):
-        return 0
+class Holdings:
+    def __init__(self, shares, puts, calls, share_units, put_units, call_units):
+        self.shares = shares
+        self.puts = puts
+        self.calls = calls
+        self.share_units = share_units
+        self.put_units = put_units
+        self.call_units = call_units
 
 
 class WebScrapeError(RuntimeError):
     pass
 
 
+def check_cusip(cusip):   # For more information, see: https://en.wikipedia.org/wiki/CUSIP
+    cusip = cusip if len(cusip) > 8 else '0'*(len(cusip) - 9) + cusip
+    total = 0
+    for i in range(len(cusip) - 1):
+        if cusip[i].isdigit():
+            val = int(cusip[i])
+        elif cusip[i] == "#":
+            val = 38
+        elif cusip[i] == "@":
+            val = 37
+        elif cusip[i] == "*":
+            val = 36
+        else:
+            val = ord(cusip[i]) - 55
+
+        if i % 2 != 0:  # Odd indices are even digits
+            val *= 2
+        total += val // 10 + val % 10
+    if (10 - total % 10) % 10 != int(cusip[8]):
+        print('CUSIP did not match checksum: ' + cusip)
+    return cusip
+
+
+def cusip_to_ticker(cusip):
+    cusip = check_cusip(cusip)
+    db = client.form13f
+    cusip_map = db.cusipmap.find_one()
+    if cusip not in cusip_map:
+        print("Could not find '" + cusip + "' in CUSIP mapping. Adding as CUSIP.")
+        db.bad_cusip.insert_one({'cusip': cusip})
+        return cusip
+    return cusip_map[cusip]
+
+
 def get_holdings(link):
     xml = BeautifulSoup(requests.get(link).content, "xml")
-    holdings = {}
+    shares = {}
+    share_units = {}
+    put_options = {}
+    put_units = {}
+    call_options = {}
+    call_units = {}
     for holding in xml("infoTable"):
-        holdings[str(holding.find("cusip").string)] = int(holding.find("value").string)
-    return holdings
+        ticker = cusip_to_ticker(str(holding.find("cusip").string))
+        if holding.find("putCall") is not None:
+            if str(holding.find("putCall").string) == 'PUT':
+                put_options[ticker] = put_options.get(ticker, 0) + int(holding.find("value").string)
+                put_units[ticker] = put_units.get(ticker, 0) + int(holding.find("sshPrnamt").string)
+            elif str(holding.find("putCall").string) == 'CALL':
+                call_options[ticker] = call_options.get(ticker, 0) + int(holding.find("value").string)
+                call_units[ticker] = call_units.get(ticker, 0) + int(holding.find("sshPrnamt").string)
+        else:
+            shares[ticker] = shares.get(ticker, 0) + int(holding.find("value").string)
+            share_units[ticker] = share_units.get(ticker, 0) + int(holding.find("sshPrnamt").string)
+    return Holdings(shares, put_options, call_options, share_units, put_units, call_units)
 
 
 def already_in_db(sec_id, db):
@@ -49,10 +109,22 @@ def get_link_and_date(filing_link):
     return "https://www.sec.gov" + form_link, date
 
 
+def update_gains(cik):
+    db = client.form13f
+    dates = [form['date'] for form in db.forms.find({"cik": cik})]
+    for form in db.forms.find({"cik": cik}):
+        if not form['gain']:
+            before_dates = [date for date in dates if date < form['date']]
+            if before_dates:
+                before_date = max(before_dates)
+                last_form = db.forms.find_one({'cik': cik, 'date': before_date})
+                gain = form['total_val'] - last_form['total_val']
+                db.forms.update_one({'_id': form['_id']}, {'$set': {'gain': gain}})
+
+
 def update_filings(cik, count=20):
     if count > 40:
         raise ValueError("Cannot get more than 40 filings - XML data may not be available that far back")
-    client = MongoClient(environ['MONGO'])
     db = client.form13f
     company_url = "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=" + \
                   cik + "&type=13F&dateb=&owner=include&count=" + str(count)
@@ -69,9 +141,11 @@ def update_filings(cik, count=20):
         sec_id = filing.get('href').split("/")[5]
         if not already_in_db(sec_id, db):
             link, date = get_link_and_date(filing.get("href"))
-            holdings = get_holdings(link)
+            holdings = get_holdings(link).__dict__
             form = Form13F(cik, sec_id, name, date, link, holdings)
             db.forms.insert_one(form.__dict__)
             print("Added form: " + sec_id + " for " + cik)
         added += 1
-    db.companies.insert_one({"name": name, "cik": cik})
+    update_gains(cik)
+    if db.companies.find_one({"name": name, "cik": cik}) is None:
+        db.companies.insert_one({"name": name, "cik": cik})

@@ -4,14 +4,6 @@ from strategy.stockdata import get_data, recent_open, next_trading_day, update_t
 
 
 client = MongoClient(environ['MONGO'])
-cusip_map = client.form13f.cusipmap.find_one()
-
-
-def cusip_to_ticker(cusip):
-    if cusip not in cusip_map:
-        print("Could not find '" + cusip + "' in CUSIP mapping. Ignoring.")
-        return None
-    return cusip_map[cusip]
 
 
 def calculate_weights(holdings, total):
@@ -20,9 +12,7 @@ def calculate_weights(holdings, total):
 
 def value_to_weight(largest_holdings, all_holdings):
     raw_values = {holding: all_holdings[holding] for holding in largest_holdings}
-    by_ticker = {cusip_to_ticker(cusip): value
-                 for cusip, value in raw_values.items() if cusip_to_ticker(cusip) is not None}
-    return calculate_weights(by_ticker, sum(by_ticker.values()))
+    return calculate_weights(raw_values, sum(raw_values.values()))
 
 
 def db_get_forms(cik, min_date):
@@ -40,8 +30,9 @@ def db_get_forms(cik, min_date):
 
 def db_get_form_holdings(form_name, cik, num_stocks, db):
     form13f = db.forms.find_one({'$and': [{'cik': cik}, {'sec_id': form_name}]})
-    largest_holdings = sorted(form13f['holdings'], key=form13f['holdings'].get, reverse=True)[:num_stocks]
-    return largest_holdings, form13f['holdings']
+    largest_holdings = sorted(form13f['holdings']['shares'], key=form13f['holdings']['shares'].get, reverse=True)
+    largest_holdings = largest_holdings[:num_stocks]
+    return largest_holdings, form13f['holdings']['shares']   # Ignoring put and call options to keep it simple
 
 
 def ensure_valid_data(form_name, form_date, next_date, cik, num_stocks):
@@ -55,9 +46,9 @@ def ensure_valid_data(form_name, form_date, next_date, cik, num_stocks):
             raise RuntimeError("Something's wrong; data retrieval failed for maximum number of tickers: " + num_stocks)
         if len(all_holdings) < num_stocks:
             raise RuntimeError("This filing has " + str(len(all_holdings)) + " stocks, but asked for " + num_stocks_new)
-        tickers = [cusip_to_ticker(cusip) for cusip in largest if cusip_to_ticker(cusip) not in failed]
+        tickers = [ticker for ticker in largest if ticker not in failed]
         failed.extend(get_data(list(tickers), form_date))
-        successful = [cusip for cusip in largest if cusip_to_ticker(cusip) not in failed]
+        successful = [ticker for ticker in largest if ticker not in failed]
         weights = value_to_weight(successful, all_holdings)
         print("Calculated " + str(len(weights)) + " valid weights from " + str(num_stocks_new) + " tickers")
     if next_date is not None:
@@ -137,4 +128,3 @@ def backtest(cik, min_date, num_stocks, initial_bank):
         weights = ensure_valid_data(form, trading_dates[form], trading_dates.get(next_date), cik, num_stocks)
         portfolio = rebalance(portfolio, weights, trading_dates[form])
         print(portfolio)
-

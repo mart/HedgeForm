@@ -47,3 +47,11 @@ main > .container {
 .dropdown-item:hover {
     background-color: rgba(70, 130, 180, 0.15);
 }
+
+.green-gain {
+    color: lightgreen;
+}
+
+.red-loss {
+    color: indianred;
+}
