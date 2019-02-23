@@ -1,13 +1,13 @@
 {% extends "layout.html" %}
-{% block nav_home %}active{% endblock %}
+{% block nav_companies %}active{% endblock %}
+{% block title %}{{ data[0].name|e }} | {% endblock %}
 {% block content %}
     <div class="container">
-        <h2 class="mt-5">Institutional investors</h2>
+        <h2 class="mt-5">{{ data.name|e }} 13F filings</h2>
         <table id="table13f" class="display nowrap table table-hover table-sm">
             <thead>
             <tr>
-                <th scope="col" class="text-center">Company</th>
-                <th scope="col" class="text-center">Last 13F filing</th>
+                <th scope="col" class="text-center">Date</th>
                 <th scope="col" class="text-center">Total value</th>
                 <th scope="col" class="text-center">Gain or loss</th>
                 <th scope="col" class="text-center">Number of holdings</th>
@@ -16,8 +16,7 @@
             <tbody>
             {% for form in data %}
                 <tr>
-                    <th scope="row"><a href="/company/{{ form.cik }}">{{ form.name|e }}</a></th>
-                    <td>{{ form.date }}</td>
+                    <th scope="row"><a href="/company/{{ form.cik }}/{{ form.sec_id }}">{{ form.date }}</a></th>
                     <td class="text-right">$ {{ form.total_val }}</td>
                     <td class="text-right {{ form.gain_class }}">$ {{ form.gain }}</td>
                     <td class="text-right">{{ form.num_holdings }}</td>
@@ -29,5 +28,5 @@
 {% endblock %}
 
 {% block datatables %}
-    "order":  [[ 2, "desc" ]]
+    "order":  [[ 0, "desc" ]]
 {% endblock %}

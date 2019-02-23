@@ -39,10 +39,10 @@
                 </li>
                 <li class="nav-item dropdown {% block nav_companies %}{% endblock %}">
                     <a class="nav-link dropdown-toggle" data-toggle="dropdown" href="#" role="button"
-                       aria-haspopup="true" aria-expanded="false">Companies</a>
+                       aria-haspopup="true" aria-expanded="false">Institutions</a>
                     <div class="dropdown-menu bg-light">
-                        {% for form in data %}
-                           <a class="dropdown-item" href="/company/{{ form.cik }}">{{ form.name }}</a>
+                        {% for company in companies %}
+                            <a class="dropdown-item" href="/company/{{ company.cik }}">{{ company.name }}</a>
                         {% endfor %}
                     </div>
                 </li>
@@ -69,7 +69,8 @@
 <!-- Sticky Footer -->
 <footer class="footer mt-auto py-3">
     <div class="container">
-        <span class="text-muted">This is a footer.</span>
+        <span class="text-muted">The information here may be inaccurate.
+        It should not be used for anything.</span>
     </div>
 </footer>
 
@@ -87,9 +88,10 @@
 <script src="https://cdn.datatables.net/1.10.19/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/1.10.19/js/dataTables.bootstrap4.min.js"></script>
 <script>
-    $(document).ready(function () {
+        $(document).ready(function () {
         $('#table13f').DataTable({
-            "scrollX": true
+            "scrollX": true,
+            {% block datatables %}{% endblock %}
         });
     });
 </script>

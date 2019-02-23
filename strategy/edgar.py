@@ -20,7 +20,16 @@ class Form13F:
             sum(self.holdings['shares'].values()) + \
             sum(self.holdings['puts'].values()) + \
             sum(self.holdings['calls'].values())
+        self.num_holdings = count_holdings(self.holdings['shares'], self.holdings['puts'], self.holdings['calls'])
         self.gain = False
+
+
+def count_holdings(shares, puts, calls):
+    tickers = list(shares.keys())
+    tickers.extend(list(puts.keys()))
+    tickers.extend(list(calls.keys()))
+    uniques = set(tickers)
+    return len(uniques)
 
 
 class Holdings:
