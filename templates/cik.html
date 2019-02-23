@@ -1,6 +1,6 @@
 {% extends "layout.html" %}
 {% block nav_companies %}active{% endblock %}
-{% block title %}{{ data[0].name|e }} | {% endblock %}
+{% block title %}Company | {% endblock %}
 {% block content %}
     <div class="container">
         <h2 class="mt-5">{{ data.name|e }} 13F filings</h2>
@@ -8,7 +8,7 @@
             <thead>
             <tr>
                 <th scope="col" class="text-center">Date</th>
-                <th scope="col" class="text-center">Total value</th>
+                <th scope="col" class="text-center">Value (000s)</th>
                 <th scope="col" class="text-center">Gain or loss</th>
                 <th scope="col" class="text-center">Number of holdings</th>
             </tr>

@@ -2,10 +2,11 @@ import requests
 from os import environ
 from datetime import datetime, timedelta
 from pymongo import MongoClient
+import logging
 
 
-DATA_API_URL = 'https://www.worldtradingdata.com/api/v1/history'
-API_KEY = environ['WTD_API']
+DATA_API_URL = 'https://www.alphavantage.co/query'
+API_KEY = environ['AV_API']
 TRADING_CANARIES = ['AAPL', 'WMT']
 MIN_DATE = '2014-01-01'
 MAX_DATE = '2019-12-31'
@@ -70,9 +71,9 @@ def update_stock_db(tickers, date, db):
             found_historical = get_historical_price(db, ticker)
             failed.append(ticker)
             if found_historical:
-                print("Found historical data for '" + ticker + "'.")
+                logging.info("Found historical data for '" + ticker + "'.")
             else:
-                print("Could not get data for '" + ticker + "'.")
+                logging.warning("Could not get data for '" + ticker + "'.")
     return failed
 
 

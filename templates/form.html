@@ -1,0 +1,33 @@
+{% extends "layout.html" %}
+{% block title %}13F Filing | {% endblock %}
+{% block content %}
+    <div class="container">
+        <h2 class="mt-5">{{ data.name|e }} 13F filing from {{ data.date }}</h2>
+        <table id="table13f" class="display nowrap table table-hover table-sm">
+            <thead>
+            <tr>
+                <th scope="col" class="text-center">Ticker</th>
+                <th scope="col" class="text-center">Name</th>
+                <th scope="col" class="text-center">Type</th>
+                <th scope="col" class="text-center">Value (000s)</th>
+                <th scope="col" class="text-center">Shares</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for holding in data.holdings %}
+                <tr>
+                    <th scope="row">{{ holding.ticker }}</th>
+                    <td>{{ holding.name|e }}</td>
+                    <td>{{ holding.security_type }}</td>
+                    <td class="text-right">$ {{ holding.value }}</td>
+                    <td class="text-right">{{ holding.units }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endblock %}
+
+{% block datatables %}
+    "order":  [[ 3, "desc" ]]
+{% endblock %}

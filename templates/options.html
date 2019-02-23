@@ -1,0 +1,31 @@
+{% extends "layout.html" %}
+{% block nav_options %}active{% endblock %}
+{% block content %}
+    <div class="container">
+        <h2 class="mt-5">Institutional investors with 13F-reported stock options</h2>
+        <table id="table13f" class="display nowrap table table-hover table-sm">
+            <thead>
+            <tr>
+                <th scope="col" class="text-center">Company</th>
+                <th scope="col" class="text-center">Options Value (000s)</th>
+                <th scope="col" class="text-center">Percent of portfolio</th>
+                <th scope="col" class="text-center">Number of holdings</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for company in data %}
+                <tr>
+                    <th scope="row"><a href="/company/{{ company.cik }}">{{ company.name|e }}</a></th>
+                    <td class="text-right">$ {{ company.options_val }}</td>
+                    <td class="text-right">{{ company.options_pc }} %</td>
+                    <td class="text-right">{{ company.option_num }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endblock %}
+
+{% block datatables %}
+    "order":  [[ 1, "desc" ]]
+{% endblock %}

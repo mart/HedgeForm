@@ -49,8 +49,27 @@ def company(cik):
 
 @app.route('/company/<cik>/<sec_id>')
 def form_page(cik, sec_id):
-    data = ""
-    return render_template('form.html', data=data)
+    companies = db.companies.find()
+    data = db.forms.find_one({'cik': cik, 'sec_id': sec_id})
+    for holding in data['holdings']:
+        holding['value'] = "{:,}".format(holding['value'])
+        holding['units'] = "{:,}".format(holding['units'])
+    return render_template('form.html', data=data, companies=companies)
+
+
+@app.route('/options')
+def options():
+    companies = db.companies.find()
+    data = {}
+    for item in companies:
+        form = db.forms.find_one({'$query': {'cik': item['cik']}, '$orderby': {'date': -1}})
+        options_val = form['total_val'] - form['share_val']
+        if options_val > 0:
+            data[item['cik']] = {'cik': item['cik'], 'name': item['name'], 'options_val': "{:,}".format(options_val)}
+            data[item['cik']]['options_pc'] = round((form['total_val'] - form['share_val']) / form['total_val'], 3)*100
+            share_num = len([holding for holding in form['holdings'] if holding['security_type'] == 'Share'])
+            data[item['cik']]['options_num'] = form['num_holdings'] - share_num
+    return render_template('options.html', data=data, companies=db.companies.find())
 
 
 if __name__ == '__main__':

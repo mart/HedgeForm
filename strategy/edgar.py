@@ -1,10 +1,18 @@
+from enum import Enum
 import requests
+import logging
 from os import environ
 from bs4 import BeautifulSoup
 from pymongo import MongoClient
 
 
 client = MongoClient(environ['MONGO'])
+
+
+class SecurityType(Enum):
+    SHARE = 1
+    CALL = 2
+    PUT = 3
 
 
 class Form13F:
@@ -15,31 +23,19 @@ class Form13F:
         self.date = date
         self.link = link
         self.holdings = holdings
-        self.share_val = sum(self.holdings['shares'].values())
-        self.total_val = \
-            sum(self.holdings['shares'].values()) + \
-            sum(self.holdings['puts'].values()) + \
-            sum(self.holdings['calls'].values())
-        self.num_holdings = count_holdings(self.holdings['shares'], self.holdings['puts'], self.holdings['calls'])
+        self.share_val = sum([holding['value'] for holding in holdings if holding['security_type'] == 'Share'])
+        self.total_val = sum([holding['value'] for holding in holdings])
+        self.num_holdings = len(holdings)
         self.gain = False
 
 
-def count_holdings(shares, puts, calls):
-    tickers = list(shares.keys())
-    tickers.extend(list(puts.keys()))
-    tickers.extend(list(calls.keys()))
-    uniques = set(tickers)
-    return len(uniques)
-
-
-class Holdings:
-    def __init__(self, shares, puts, calls, share_units, put_units, call_units):
-        self.shares = shares
-        self.puts = puts
-        self.calls = calls
-        self.share_units = share_units
-        self.put_units = put_units
-        self.call_units = call_units
+class Holding:
+    def __init__(self, ticker, name, security_type, value, units):
+        self.ticker = ticker
+        self.name = name
+        self.security_type = security_type
+        self.value = value
+        self.units = units
 
 
 class WebScrapeError(RuntimeError):
@@ -65,7 +61,7 @@ def check_cusip(cusip):   # For more information, see: https://en.wikipedia.org/
             val *= 2
         total += val // 10 + val % 10
     if (10 - total % 10) % 10 != int(cusip[8]):
-        print('CUSIP did not match checksum: ' + cusip)
+        logging.warning('CUSIP did not match checksum: ' + cusip)
     return cusip
 
 
@@ -74,33 +70,42 @@ def cusip_to_ticker(cusip):
     db = client.form13f
     cusip_map = db.cusipmap.find_one()
     if cusip not in cusip_map:
-        print("Could not find '" + cusip + "' in CUSIP mapping. Adding as CUSIP.")
+        logging.warning("Could not find '" + cusip + "' in CUSIP mapping. Adding as CUSIP.")
         db.bad_cusip.insert_one({'cusip': cusip})
         return cusip
     return cusip_map[cusip]
 
 
+def aggregate_holdings(holdings):
+    out = []
+    for security_type in holdings.values():
+        out.extend(security_type.values())
+    for holding in out:
+        holding.security_type = holding.security_type.name.title()
+    return [holding.__dict__ for holding in out]
+
+
 def get_holdings(link):
     xml = BeautifulSoup(requests.get(link).content, "xml")
-    shares = {}
-    share_units = {}
-    put_options = {}
-    put_units = {}
-    call_options = {}
-    call_units = {}
+    holdings = {SecurityType.SHARE: {}, SecurityType.PUT: {}, SecurityType.CALL: {}}
     for holding in xml("infoTable"):
         ticker = cusip_to_ticker(str(holding.find("cusip").string))
+        security_type = SecurityType.SHARE
         if holding.find("putCall") is not None:
             if str(holding.find("putCall").string) == 'PUT':
-                put_options[ticker] = put_options.get(ticker, 0) + int(holding.find("value").string)
-                put_units[ticker] = put_units.get(ticker, 0) + int(holding.find("sshPrnamt").string)
+                security_type = SecurityType.PUT
             elif str(holding.find("putCall").string) == 'CALL':
-                call_options[ticker] = call_options.get(ticker, 0) + int(holding.find("value").string)
-                call_units[ticker] = call_units.get(ticker, 0) + int(holding.find("sshPrnamt").string)
+                security_type = SecurityType.CALL
+        name = str(holding.find("nameOfIssuer").string).title().replace(" New", "")
+        value = int(holding.find("value").string)
+        units = int(holding.find("sshPrnamt").string)
+
+        if holdings[security_type].get(ticker) is not None:
+            holdings[security_type][ticker].value += value
+            holdings[security_type][ticker].units += units
         else:
-            shares[ticker] = shares.get(ticker, 0) + int(holding.find("value").string)
-            share_units[ticker] = share_units.get(ticker, 0) + int(holding.find("sshPrnamt").string)
-    return Holdings(shares, put_options, call_options, share_units, put_units, call_units)
+            holdings[security_type][ticker] = Holding(ticker, name, security_type, value, units)
+    return aggregate_holdings(holdings)
 
 
 def already_in_db(sec_id, db):
@@ -150,10 +155,10 @@ def update_filings(cik, count=20):
         sec_id = filing.get('href').split("/")[5]
         if not already_in_db(sec_id, db):
             link, date = get_link_and_date(filing.get("href"))
-            holdings = get_holdings(link).__dict__
+            holdings = get_holdings(link)
             form = Form13F(cik, sec_id, name, date, link, holdings)
             db.forms.insert_one(form.__dict__)
-            print("Added form: " + sec_id + " for " + cik)
+            logging.info("Added form: " + sec_id + " for " + cik)
         added += 1
     update_gains(cik)
     if db.companies.find_one({"name": name, "cik": cik}) is None:
