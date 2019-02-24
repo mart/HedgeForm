@@ -24,32 +24,41 @@ def db_get_forms(cik, min_date):
     return form_names, portfolio_date
 
 
-def db_get_form_holdings(form_name, cik, num_stocks, db):
+def db_get_form_holdings(form_name, cik, db):
     form13f = db.forms.find_one({'$and': [{'cik': cik}, {'sec_id': form_name}]})
     share_holdings = {holding['ticker']: holding['value'] for holding in form13f['holdings']
                       if holding['security_type'] == 'Share'}
-    largest_tickers = sorted(share_holdings, key=share_holdings.get, reverse=True)[:num_stocks]
-    largest_holdings = {ticker: share_holdings[ticker] for ticker in largest_tickers}
-    return largest_holdings, share_holdings   # Ignoring put and call options to keep it simple
+    return share_holdings   # Ignoring put and call options to keep it simple
+
+
+def find_valid_tickers(all_holdings, num_stocks, failed, form_date):
+    largest_tickers = sorted(all_holdings, key=all_holdings.get, reverse=True)[:num_stocks]
+    largest_holdings = {ticker: all_holdings[ticker] for ticker in largest_tickers}
+    tickers = [ticker for ticker in largest_holdings.keys() if ticker not in failed]
+    failed.extend(get_data(tickers, form_date))
+    successful = {ticker: value for ticker, value in largest_holdings.items() if ticker not in failed}
+    weights = value_to_weight(successful)
+    return weights, failed
 
 
 def ensure_valid_data(form_name, form_date, next_date, cik, num_stocks):
     db = client.get_database()
     weights = {}
     failed = []
+    all_holdings = db_get_form_holdings(form_name, cik, db)
     while len(weights) < num_stocks:
-        if len(failed) > num_stocks:
-            raise RuntimeError("Data retrieval failed for max number of tickers: " + str(num_stocks))
         num_stocks_new = num_stocks + len(failed)
-        largest, all_holdings = db_get_form_holdings(form_name, cik, num_stocks_new, db)
-        tickers = [ticker for ticker in largest.keys() if ticker not in failed]
-        failed.extend(get_data(tickers, form_date))
-        successful = {ticker: value for ticker, value in largest.items() if ticker not in failed}
-        weights = value_to_weight(successful)
+        weights, failed = find_valid_tickers(all_holdings, num_stocks_new, failed, form_date)
         print("BACKTEST: " + str(len(weights)) + " valid weights from " + str(num_stocks_new) + " tickers")
         if len(all_holdings) < num_stocks:
             print("WARNING/BT: This filing has " + str(len(all_holdings)) +
                   " stocks, but asked for " + str(num_stocks_new) + ". Using all available.")
+            weights, failed = find_valid_tickers(all_holdings, len(all_holdings), failed, form_date)
+            break
+        if len(all_holdings) - len(failed) <= num_stocks:
+            print("WARNING/BT:Data retrieval failed for too many (" + str(len(failed)) +
+                  ") tickers. Using all available")
+            weights, failed = find_valid_tickers(all_holdings, len(all_holdings), failed, form_date)
             break
     if next_date is not None:
         get_data(list(weights.keys()), next_date)  # Failed future data is ignored to avoid lookahead bias
