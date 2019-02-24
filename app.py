@@ -14,7 +14,7 @@ def home():
     data = []
     for item in companies:
         form = db.forms.find_one({'$query': {'cik': item['cik']}, '$orderby': {'date': -1}})
-        form['backtest'] = db.backtest.find_one({'cik': item['cik']})[str(max(num_stock_list))]
+        form['backtest'] = db.backtest.find_one({'cik': item['cik']}).get(str(max(num_stock_list)), "N/A")
         form['num_holdings'] = "{:,}".format(form['num_holdings'])
         form['total_val'] = "{:,}".format(form['total_val'])
         if form['gain'] > 0:
