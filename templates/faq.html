@@ -1,7 +1,35 @@
 {% extends "layout.html" %}
 {% block nav_faq %}active{% endblock %}
+{% block title %}FAQ | {% endblock %}
 {% block content %}
     <div class="container">
         <h2 class="mt-5">FAQ</h2>
     </div>
+    <div class="container">
+        <div class="card mb-2">
+            <div class="card-body">
+                <h5 class="card-title">What is this?</h5>
+                <p class="card-text">
+                    I made this to analyze form 13F filings.
+                </p>
+            </div>
+        </div>
+        <div class="card mb-2">
+            <div class="card-body">
+                <h5 class="card-title">What's a form 13F?</h5>
+                <p class="card-text">
+                    It's a form that details many of the investments of institutions with more than $100 million in
+                    assets. Any institution over that limit is required to file with the SEC every quarter. See
+                    <a href="https://en.wikipedia.org/wiki/Form_13F">the Form 13F Wikipedia article.</a>
+                </p>
+            </div>
+        </div>
+        <div class="card mb-2">
+            <div class="card-body">
+                <h5 class="card-title">Why?</h5>
+                <p class="card-text">To try out some new tools.</p>
+            </div>
+        </div>
+    </div>
+
 {% endblock %}

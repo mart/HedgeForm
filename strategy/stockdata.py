@@ -24,9 +24,11 @@ def data_request(params, ticker):
     raw_data = requests.get(url, params=params).json()
     print("REQUEST/API: Stock data for " + ticker)
     if isinstance(raw_data, list) and len(raw_data) < 2:
-        raise APIError("Error with " + ticker + " request: " + raw_data[0][:20] if len(raw_data) > 0 else None)
+        print("WARNING/SD: Error with " + ticker + " request: " + raw_data[0][:20] if len(raw_data) > 0 else None)
+        raise APIError()
     if isinstance(raw_data, dict) and raw_data.get("detail") is not None:
-        raise APIError("Error with " + ticker + " request: " + raw_data.get("detail"))
+        print(" WARNING/SD: Error with " + ticker + " request: " + raw_data.get("detail"))
+        raise APIError()
     data = {'name': ticker, 'history': {}}
     for datum in raw_data:
         data['history'][datum['date'][:10]] = datum
@@ -42,16 +44,6 @@ def recent_open(ticker, date):
     dates = [hist_date for hist_date in data['history'].keys() if hist_date < date]
     before_date = max(dates)
     return data['history'][before_date]['adjOpen']     # The closest open price before the supplied date
-
-
-def get_historical_price(ticker):
-    params = {'token': API_KEY, 'startDate': MIN_DATE}
-    try:
-        data = data_request(params, ticker)
-    except APIError:
-        return False
-    db.stockdata.replace_one({'name': ticker}, data, upsert=True)
-    return True
 
 
 def already_in_db(ticker, date):
@@ -70,14 +62,8 @@ def update_stock_db(tickers, date):
             db.stockdata.replace_one({'name': ticker}, data, upsert=True)
             if data['history'].get(date) is None:
                 failed.append(ticker)
-        except APIError as e:
-            print("WARNING/SD: " + str(e))
-            found_historical = get_historical_price(ticker)
+        except APIError:
             failed.append(ticker)
-            if found_historical:
-                print("STOCKDATA: Found historical data for '" + ticker + "'.")
-            else:
-                print("STOCKDATA: Could not get data for '" + ticker + "'.")
     return failed
 
 
