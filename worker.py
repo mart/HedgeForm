@@ -12,7 +12,7 @@ update_trading_days()
 
 
 for cik in update_list:
-    update_filings(cik, 40)
-    update_gains(cik)
-    for num in num_stock_list:
-        backtest(cik, '2014-01-01', num, 1000000)
+    if update_filings(cik, 40):
+        update_gains(cik)
+        for num in num_stock_list:
+            backtest(cik, '2014-01-01', num, 1000000)

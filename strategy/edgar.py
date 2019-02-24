@@ -44,7 +44,8 @@ class WebScrapeError(RuntimeError):
 
 
 def check_cusip(cusip):   # For more information, see: https://en.wikipedia.org/wiki/CUSIP
-    cusip = cusip if len(cusip) > 8 else '0'*(len(cusip) - 9) + cusip
+    if len(cusip) < 9:
+        cusip = '0'*(9 - len(cusip)) + cusip
     total = 0
     for i in range(len(cusip) - 1):
         if cusip[i].isdigit():
@@ -143,16 +144,8 @@ def update_gains(cik):
                 db.forms.update_one({'_id': form['_id']}, {'$set': {'gain': gain}})
 
 
-def update_filings(cik, count=20):
-    if count > 40:
-        raise ValueError("Cannot get more than 40 filings - XML data may not be available that far back")
-    company_url = "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=" + \
-                  cik + "&type=13F&dateb=&owner=include&count=" + str(count)
-    soup = BeautifulSoup(requests.get(company_url).content, "html.parser")
-    print("REQUEST/SEC: 13F filing company page " + cik)
-    company_string = soup.select(".companyName")[0].text
-    name = company_string.split(" CIK")[0].title()
-    filing_links = soup("a", id="documentsbutton")
+def add_filings(cik, filing_links, count, name):
+    updated = False
     added = 0
     for filing in filing_links:
         if added == count:
@@ -163,6 +156,7 @@ def update_filings(cik, count=20):
         if not already_in_db(sec_id):
             link, date = get_link_and_date(filing.get("href"))
             if link is not None:
+                updated = True
                 holdings = get_holdings(link)
                 form = Form13F(cik, sec_id, name, date, link, holdings)
                 db.forms.insert_one(form.__dict__)
@@ -170,7 +164,25 @@ def update_filings(cik, count=20):
             else:
                 db.forms.insert_one({'sec_id': sec_id})
         added += 1
+    return updated
+
+
+def update_filings(cik, count=20):
+    if count > 40:
+        raise ValueError("Cannot get more than 40 filings - XML data may not be available that far back")
+    company_url = "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=" + \
+                  cik + "&type=13F&dateb=&owner=include&count=" + str(count)
+    soup = BeautifulSoup(requests.get(company_url).content, "html.parser")
+    print("REQUEST/SEC: 13F filing company page " + cik)
+    if soup.select(".companyName"):
+        company_string = soup.select(".companyName")[0].text
+    else:
+        return False
+    name = company_string.split(" CIK")[0].title()
+    filing_links = soup("a", id="documentsbutton")
+    updated = add_filings(cik, filing_links, count, name)
     update_gains(cik)
     if db.companies.find_one({"name": name, "cik": cik}) is None \
             and db.forms.find_one({'$and': [{'cik': cik}, {'date': {"$exists": True}}]}) is not None:
         db.companies.insert_one({"name": name, "cik": cik})
+    return updated
