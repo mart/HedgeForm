@@ -6,8 +6,8 @@ from bs4 import BeautifulSoup
 from pymongo import MongoClient
 
 
-client = MongoClient(environ['MONGO'])
-db = client.form13f
+client = MongoClient(environ['MONGODB_URI'])
+db = client.get_database()
 MIN_13F_DATE = '2014-01-01'
 
 

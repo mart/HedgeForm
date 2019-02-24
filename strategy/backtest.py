@@ -2,7 +2,7 @@ from os import environ
 from pymongo import MongoClient
 from strategy.stockdata import get_data, recent_open, next_trading_day, DataError
 
-client = MongoClient(environ['MONGO'])
+client = MongoClient(environ['MONGODB_URI'])
 MIN_13F_DATE = '2014-01-01'
 
 
@@ -12,7 +12,7 @@ def value_to_weight(holdings):
 
 
 def db_get_forms(cik, min_date):
-    db = client.form13f
+    db = client.get_database()
     forms = db.forms.find({'cik': cik})
     form_names = []
     portfolio_date = {}
@@ -34,7 +34,7 @@ def db_get_form_holdings(form_name, cik, num_stocks, db):
 
 
 def ensure_valid_data(form_name, form_date, next_date, cik, num_stocks):
-    db = client.form13f
+    db = client.get_database()
     weights = {}
     failed = []
     while len(weights) < num_stocks:
@@ -57,7 +57,7 @@ def ensure_valid_data(form_name, form_date, next_date, cik, num_stocks):
 
 
 def get_values(portfolio, next_weight, date):
-    db = client.form13f
+    db = client.get_database()
     tickers = list(portfolio.keys())
     next_tickers = [ticker for ticker in next_weight.keys()]
     tickers.extend(next_tickers)
@@ -120,7 +120,7 @@ def backtest(cik, min_date, num_stocks, initial_bank):
         print("WARNING/BT: Minimum date " + min_date + " less than global minimum. Using " + MIN_13F_DATE + " instead.")
         min_date = MIN_13F_DATE
     forms, form_dates = db_get_forms(cik, min_date)
-    db = client.form13f
+    db = client.get_database()
     total = 0
     trading_dates = {sec_id: next_trading_day(date) for sec_id, date in form_dates.items()}
     to_backtest = sorted(forms)

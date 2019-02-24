@@ -7,8 +7,8 @@ DATA_API_URL = 'https://api.tiingo.com/tiingo/daily/'
 API_KEY = environ['TIINGO_API']
 TRADING_CANARIES = ['AAPL', 'WMT']
 MIN_DATE = '2014-01-01'
-client = MongoClient(environ['MONGO'])
-db = client.form13f
+client = MongoClient(environ['MONGODB_URI'])
+db = client.get_database()
 
 
 class DataError(RuntimeError):

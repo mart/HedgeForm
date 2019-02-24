@@ -3,8 +3,8 @@ from pymongo import MongoClient
 
 
 def update_cusip_map():
-    client = MongoClient(os.environ['MONGO'])
-    db = client.form13f
+    client = MongoClient(os.environ['MONGODB_URI'])
+    db = client.get_database()
     cusip_map = {}
     directory = os.environ["TEXT_FILES_DIR"]
     for filename in sorted(os.listdir(directory)):

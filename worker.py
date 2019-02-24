@@ -4,8 +4,8 @@ from strategy.stockdata import update_trading_days
 from pymongo import MongoClient
 from os import environ
 
-client = MongoClient(environ['MONGO'])
-db = client.form13f
+client = MongoClient(environ['MONGODB_URI'])
+db = client.get_database()
 update_list = db.cik.find_one()['cik']
 num_stock_list = [5, 15, 50]
 update_trading_days()

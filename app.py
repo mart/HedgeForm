@@ -3,8 +3,8 @@ from pymongo import MongoClient
 from os import environ
 
 app = Flask(__name__)
-client = MongoClient(environ['MONGO'])
-db = client.form13f
+client = MongoClient(environ['MONGODB_URI'])
+db = client.get_database()
 num_stock_list = [5, 15, 50]
 
 
