@@ -1,6 +1,5 @@
 from enum import Enum
 import requests
-import logging
 from os import environ
 from bs4 import BeautifulSoup
 from pymongo import MongoClient
@@ -63,7 +62,7 @@ def check_cusip(cusip):   # For more information, see: https://en.wikipedia.org/
             val *= 2
         total += val // 10 + val % 10
     if (10 - total % 10) % 10 != int(cusip[8]):
-        logging.warning('CUSIP did not match checksum: ' + cusip)
+        print('WARNING/ED: CUSIP did not match checksum: ' + cusip)
     return cusip
 
 
@@ -71,7 +70,7 @@ def cusip_to_ticker(cusip):
     cusip = check_cusip(cusip)
     cusip_map = db.cusipmap.find_one()
     if cusip not in cusip_map:
-        logging.warning("Could not find '" + cusip + "' in CUSIP mapping. Adding as CUSIP.")
+        print("WARNING/ED: Could not find '" + cusip + "' in CUSIP mapping. Adding as CUSIP.")
         db.bad_cusip.insert_one({'cusip': cusip})
         return cusip
     return cusip_map[cusip]
@@ -123,7 +122,10 @@ def get_link_and_date(filing_link):
         raise WebScrapeError("SEC changed their EDGAR format! You'll have to edit the web scraper.")
     date = str(soup.select("div.formGrouping > div:nth-of-type(2)")[0].string)
     if date < MIN_13F_DATE:
-        logging.warning("Skipping 13F filing from " + date + ". Filed before minimum date of: " + MIN_13F_DATE)
+        print("WARNING/ED: Skipping 13F filing from " + date + ". Filed before minimum date of: " + MIN_13F_DATE)
+        return None, None
+    if not soup.select("table.tableFile > tr:nth-of-type(5) > td:nth-of-type(3) > a"):
+        print("WARNING/ED: Could not find XML from " + date + " Skipping.")
         return None, None
     form_link = soup.select("table.tableFile > tr:nth-of-type(5) > td:nth-of-type(3) > a")[0].get("href")
     return "https://www.sec.gov" + form_link, date
@@ -164,10 +166,11 @@ def update_filings(cik, count=20):
                 holdings = get_holdings(link)
                 form = Form13F(cik, sec_id, name, date, link, holdings)
                 db.forms.insert_one(form.__dict__)
-                logging.info("Added form: " + sec_id + " for " + cik)
+                print("EDGAR: Added form: " + sec_id + " for " + cik)
             else:
                 db.forms.insert_one({'sec_id': sec_id})
         added += 1
     update_gains(cik)
-    if db.companies.find_one({"name": name, "cik": cik}) is None:
+    if db.companies.find_one({"name": name, "cik": cik}) is None \
+            and db.forms.find_one({'$and': [{'cik': cik}, {'date': {"$exists": True}}]}) is not None:
         db.companies.insert_one({"name": name, "cik": cik})
