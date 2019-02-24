@@ -21,6 +21,6 @@ def parse_fail_filing(file):
     for line in file:
         col = line.split('|')
         if len(col) > 2:
-            file_map[col[1]] = col[2].replace("XXXX", "").replace("ZZZZ", "")
+            file_map[col[1]] = col[2].replace("XXXX", "").replace("ZZZZ", "")   # SEC sometimes pads with extra letters
     del file_map['CUSIP']
     return file_map

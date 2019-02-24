@@ -1,10 +1,9 @@
 from os import environ
 from pymongo import MongoClient
-from strategy.stockdata import get_data, recent_open, next_trading_day, update_trading_days, DataError
-import logging
-
+from strategy.stockdata import get_data, recent_open, next_trading_day, DataError
 
 client = MongoClient(environ['MONGO'])
+MIN_13F_DATE = '2014-01-01'
 
 
 def value_to_weight(holdings):
@@ -39,17 +38,19 @@ def ensure_valid_data(form_name, form_date, next_date, cik, num_stocks):
     weights = {}
     failed = []
     while len(weights) < num_stocks:
+        if len(failed) > num_stocks:
+            raise RuntimeError("Data retrieval failed for max number of tickers: " + str(num_stocks))
         num_stocks_new = num_stocks + len(failed)
         largest, all_holdings = db_get_form_holdings(form_name, cik, num_stocks_new, db)
-        if len(failed) > num_stocks:
-            raise RuntimeError("Something's wrong; data retrieval failed for maximum number of tickers: " + num_stocks)
-        if len(all_holdings) < num_stocks:
-            raise RuntimeError("This filing has " + str(len(all_holdings)) + " stocks, but asked for " + num_stocks_new)
         tickers = [ticker for ticker in largest.keys() if ticker not in failed]
         failed.extend(get_data(tickers, form_date))
         successful = {ticker: value for ticker, value in largest.items() if ticker not in failed}
         weights = value_to_weight(successful)
-        logging.info("Calculated " + str(len(weights)) + " valid weights from " + str(num_stocks_new) + " tickers")
+        print("BACKTEST: " + str(len(weights)) + " valid weights from " + str(num_stocks_new) + " tickers")
+        if len(all_holdings) < num_stocks:
+            print("WARNING/BT: This filing has " + str(len(all_holdings)) +
+                  " stocks, but asked for " + str(num_stocks_new) + ". Using all available.")
+            break
     if next_date is not None:
         get_data(list(weights.keys()), next_date)  # Failed future data is ignored to avoid lookahead bias
     return weights
@@ -66,11 +67,11 @@ def get_values(portfolio, next_weight, date):
     for ticker in tickers:
         data = db.stockdata.find_one({'$and': [{'name': ticker}, {'history.' + date: {"$exists": True}}]})
         if data is not None:
-            open_price = data['history'][date]['open']
+            open_price = data['history'][date]['adjOpen']
         elif ticker in next_tickers:        # Current price is required for all next tickers but not current
             raise DataError("Cannot backtest further (unknown buy price for '" + ticker + "').")
         else:
-            open_price = recent_open(ticker, date, db)
+            open_price = recent_open(ticker, date)
 
         if open_price is None:              # Need at least a price from some time in the past for current tickers
             raise DataError("Cannot backtest further (unknown sale price for '" + ticker + "').")
@@ -98,10 +99,10 @@ def buy_sell(portfolio, str_prices, delta, total):
             portfolio[holding] += share_transaction
         portfolio['cash'] -= share_transaction * prices[holding]
         if share_transaction < 0:
-            logging.info("Sold " + str(abs(share_transaction)) + " of " + holding + " for " +
+            print("BACKTEST: Sold " + str(abs(share_transaction)) + " of " + holding + " for " +
                   str(abs(round(share_transaction * prices[holding], 2))))
         else:
-            logging.info("Bought " + str(share_transaction) + " of " + holding + " for " +
+            print("BACKTEST: Bought " + str(share_transaction) + " of " + holding + " for " +
                   str(round(share_transaction * prices[holding], 2)))
     return {ticker: shares for ticker, shares in portfolio.items() if shares != 0}
 
@@ -109,17 +110,19 @@ def buy_sell(portfolio, str_prices, delta, total):
 def rebalance(portfolio, next_weight, date):
     portfolio_value, prices = get_values(portfolio, next_weight, date)
     total = sum(portfolio_value.values())
-    logging.info("Portfolio value: $" + str(round(total, 2)) + " on " + date)
+    print("BACKTEST: Portfolio value: $" + str(round(total, 2)) + " on " + date)
     delta = compare_weights(value_to_weight(portfolio_value), next_weight)
     return buy_sell(portfolio, prices, delta, total), total
 
 
 def backtest(cik, min_date, num_stocks, initial_bank):
-    update_trading_days()
+    if min_date < MIN_13F_DATE:
+        print("WARNING/BT: Minimum date " + min_date + " less than global minimum. Using " + MIN_13F_DATE + " instead.")
+        min_date = MIN_13F_DATE
     forms, form_dates = db_get_forms(cik, min_date)
     db = client.form13f
     total = 0
-    trading_dates = {sec_id: next_trading_day(date, db) for sec_id, date in form_dates.items()}
+    trading_dates = {sec_id: next_trading_day(date) for sec_id, date in form_dates.items()}
     to_backtest = sorted(forms)
     portfolio = {"cash": initial_bank}
     for form in to_backtest:
@@ -127,7 +130,10 @@ def backtest(cik, min_date, num_stocks, initial_bank):
         next_date = to_backtest[next_date_index] if len(to_backtest) > next_date_index else None
         weights = ensure_valid_data(form, trading_dates[form], trading_dates.get(next_date), cik, num_stocks)
         portfolio, total = rebalance(portfolio, weights, trading_dates[form])
-        logging.info(portfolio)
-    db.backtest.update_one({'cik': cik, 'num_stock': len(portfolio)},
-                           {'$set': {'min_date': min_date, 'return': round(((total / initial_bank)-1)*100, 2)}},
+        print("BACKTEST: " + str(portfolio))
+    db.backtest.update_one({'cik': cik},
+                           {'$set': {str(num_stocks):
+                                     {'num_stocks': str(len(portfolio) - 1),
+                                      'min_date': min_date,
+                                      'return': round(((total / initial_bank)-1)*100, 2)}}},
                            upsert=True)

@@ -9,22 +9,31 @@
                 <th scope="col" class="text-center">Company</th>
                 <th scope="col" class="text-center">Last 13F filing</th>
                 <th scope="col" class="text-center">Value (000s)</th>
-                <th scope="col" class="text-center">Gain or loss</th>
+                <th scope="col" class="text-center">Change</th>
                 <th scope="col" class="text-center">Number of holdings</th>
+                <th scope="col" class="text-center">Top 50 Backtest*</th>
             </tr>
             </thead>
             <tbody>
             {% for form in data %}
                 <tr>
                     <th scope="row"><a href="/company/{{ form.cik }}">{{ form.name|e }}</a></th>
-                    <td>{{ form.date }}</td>
+                    <td><a href="/company/{{ form.cik }}/{{ form.sec_id }}">{{ form.date }}</a></td>
                     <td class="text-right">$ {{ form.total_val }}</td>
                     <td class="text-right {{ form.gain_class }}">$ {{ form.gain }}</td>
                     <td class="text-right">{{ form.num_holdings }}</td>
+                    <td class="text-right">{{ form.backtest.return }} %</td>
                 </tr>
             {% endfor %}
             </tbody>
         </table>
+    </div>
+    <div class="container">
+        <div class="card">
+            <div class="card-body">
+                *This feature is in beta.
+            </div>
+        </div>
     </div>
 {% endblock %}
 

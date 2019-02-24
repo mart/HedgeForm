@@ -5,6 +5,7 @@ from os import environ
 app = Flask(__name__)
 client = MongoClient(environ['MONGO'])
 db = client.form13f
+num_stock_list = [5, 15, 50]
 
 
 @app.route('/')
@@ -13,6 +14,7 @@ def home():
     data = []
     for item in companies:
         form = db.forms.find_one({'$query': {'cik': item['cik']}, '$orderby': {'date': -1}})
+        form['backtest'] = db.backtest.find_one({'cik': item['cik']})[str(max(num_stock_list))]
         form['num_holdings'] = "{:,}".format(form['num_holdings'])
         form['total_val'] = "{:,}".format(form['total_val'])
         if form['gain'] > 0:
@@ -44,7 +46,7 @@ def company(cik):
             form['gain_class'] = "red-loss"
         form['gain'] = "{:,}".format(form['gain'])
         data.append(form)
-    return render_template('cik.html', data=data, companies=companies)
+    return render_template('company.html', data=data, companies=companies)
 
 
 @app.route('/company/<cik>/<sec_id>')
