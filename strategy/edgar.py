@@ -51,7 +51,10 @@ def valid_cusip(cusip):   # For more information, see: https://en.wikipedia.org/
         if i % 2 != 0:  # Odd indices are even digits
             val *= 2
         total += val // 10 + val % 10
-    return (10 - total % 10) % 10 == int(cusip[8])
+    if cusip[8].isdigit():
+        return (10 - total % 10) % 10 == int(cusip[8])
+    else:
+        return False
 
 
 def cusip_to_ticker(cusip):
@@ -63,7 +66,7 @@ def cusip_to_ticker(cusip):
     cusip_map = db.cusipmap.find_one()
     if cusip not in cusip_map:
         print("WARNING/ED: Could not find '" + cusip + "' in CUSIP mapping. Adding as CUSIP.")
-        db.bad_cusip.insert_one({'cusip': cusip})
+        db.bad_cusip.replace_one({'cusip': cusip}, {'cusip': cusip}, upsert=True)
         return cusip
     return cusip_map[cusip]
 

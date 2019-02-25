@@ -50,8 +50,11 @@ def recent_open(ticker, date):
     if data['history'].get(date) is not None:
         return data['history'][date]
     dates = [hist_date for hist_date in data['history'].keys() if hist_date < date]
-    before_date = max(dates)
-    return data['history'].get(before_date)    # The closest open price before the supplied date
+    if dates:
+        before_date = max(dates)
+        return data['history'].get(before_date)    # The closest open price before the supplied date
+    else:
+        return None
 
 
 def already_in_db(ticker, date):

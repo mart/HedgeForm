@@ -13,7 +13,7 @@
             </tr>
             </thead>
             <tbody>
-            {% for company in data %}
+            {% for company in data.values() %}
                 <tr>
                     <th scope="row"><a href="/company/{{ company.cik }}">{{ company.name|e }}</a></th>
                     <td class="text-right">$ {{ company.options_val }}</td>
