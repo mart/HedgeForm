@@ -30,7 +30,7 @@ main > .container {
     border-color: rgba(128, 128, 128, 0.65);
 }
 
-.table-hover > tbody > tr:hover{
+.table-hover > tbody > tr:hover {
     background-color: rgba(70, 130, 180, 0.15) !important;
 }
 
@@ -42,6 +42,26 @@ main > .container {
 .table-hover > thead > tr > th::before,
 .table-hover > thead > tr > th::after {
     font-family: "Helvetica Neue", HelveticaNeue, Helvetica, Arial, sans-serif !important;
+}
+
+.table-hover > tbody > tr > th {
+    font-weight: normal;
+}
+
+.table-hover > tbody > tr a {
+    color: rgb(0, 122, 210);
+}
+
+.table-hover > tbody > tr a:hover {
+    color: rgb(1, 67, 149);
+}
+
+.page-link {
+    color: rgb(0, 122, 210);
+}
+
+.page-link:focus {
+    box-shadow: unset;
 }
 
 .dropdown-item:hover {
@@ -65,3 +85,4 @@ table.dataTable.table-sm > thead > tr > th {
     border-color: rgba(128, 128, 128, 0) !important;
 
 }
+

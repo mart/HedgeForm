@@ -19,6 +19,14 @@ class APIError(ConnectionError):
     pass
 
 
+def specific_open(ticker, date):
+    data = db.stockdata.find_one({'$and': [{'name': ticker}, {'history.' + date: {"$exists": True}}]})
+    if data is not None:
+        return data['history'].get(date)
+    else:
+        return None
+
+
 def data_request(params, ticker):
     url = DATA_API_URL + ticker + "/prices"
     raw_data = requests.get(url, params=params).json()
@@ -31,7 +39,7 @@ def data_request(params, ticker):
         raise APIError()
     data = {'name': ticker, 'history': {}}
     for datum in raw_data:
-        data['history'][datum['date'][:10]] = datum
+        data['history'][datum['date'][:10]] = datum['adjOpen']
     return data
 
 
@@ -40,10 +48,10 @@ def recent_open(ticker, date):
     if data is None:
         return None
     if data['history'].get(date) is not None:
-        return data['history'][date]['adjOpen']
+        return data['history'][date]
     dates = [hist_date for hist_date in data['history'].keys() if hist_date < date]
     before_date = max(dates)
-    return data['history'][before_date]['adjOpen']     # The closest open price before the supplied date
+    return data['history'].get(before_date)    # The closest open price before the supplied date
 
 
 def already_in_db(ticker, date):
@@ -61,6 +69,7 @@ def update_stock_db(tickers, date):
             data = data_request(params, ticker)
             db.stockdata.replace_one({'name': ticker}, data, upsert=True)
             if data['history'].get(date) is None:
+                print(" WARNING/SD: Could not get data for " + ticker + " on: " + date)
                 failed.append(ticker)
         except APIError:
             failed.append(ticker)

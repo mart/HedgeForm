@@ -1,6 +1,6 @@
 from os import environ
 from pymongo import MongoClient
-from strategy.stockdata import get_data, recent_open, next_trading_day, DataError
+from strategy.stockdata import get_data, specific_open, recent_open, next_trading_day, DataError
 
 client = MongoClient(environ['MONGODB_URI'])
 MIN_13F_DATE = '2014-01-01'
@@ -11,24 +11,25 @@ def value_to_weight(holdings):
     return {holding: value / total for holding, value in holdings.items()}
 
 
-def db_get_forms(cik, min_date):
+def db_get_forms(cik, min_date, max_date):
     db = client.get_database()
     forms = db.forms.find({'cik': cik})
     form_names = []
     portfolio_date = {}
     for form13f in forms:
-        if form13f['date'] < min_date:
+        if form13f['date'] < min_date or form13f['date'] > max_date:
             continue
         form_names.append(form13f['sec_id'])
         portfolio_date[form13f['sec_id']] = form13f['date']
     return form_names, portfolio_date
 
 
-def db_get_form_holdings(form_name, cik, db):
+def db_get_form_holdings(form_name, cik):
+    db = client.form13f
     form13f = db.forms.find_one({'$and': [{'cik': cik}, {'sec_id': form_name}]})
     share_holdings = {holding['ticker']: holding['value'] for holding in form13f['holdings']
                       if holding['security_type'] == 'Share'}
-    return share_holdings   # Ignoring put and call options to keep it simple
+    return share_holdings  # Ignoring put and call options to keep it simple
 
 
 def find_valid_tickers(all_holdings, num_stocks, failed, form_date):
@@ -42,10 +43,9 @@ def find_valid_tickers(all_holdings, num_stocks, failed, form_date):
 
 
 def ensure_valid_data(form_name, form_date, next_date, cik, num_stocks):
-    db = client.get_database()
     weights = {}
     failed = []
-    all_holdings = db_get_form_holdings(form_name, cik, db)
+    all_holdings = db_get_form_holdings(form_name, cik)
     while len(weights) < num_stocks:
         num_stocks_new = num_stocks + len(failed)
         weights, failed = find_valid_tickers(all_holdings, num_stocks_new, failed, form_date)
@@ -66,7 +66,6 @@ def ensure_valid_data(form_name, form_date, next_date, cik, num_stocks):
 
 
 def get_values(portfolio, next_weight, date):
-    db = client.get_database()
     tickers = list(portfolio.keys())
     next_tickers = [ticker for ticker in next_weight.keys()]
     tickers.extend(next_tickers)
@@ -74,15 +73,13 @@ def get_values(portfolio, next_weight, date):
     portfolio_value = {'cash': portfolio['cash']}
     prices = {'cash': 1}
     for ticker in tickers:
-        data = db.stockdata.find_one({'$and': [{'name': ticker}, {'history.' + date: {"$exists": True}}]})
-        if data is not None:
-            open_price = data['history'][date]['adjOpen']
-        elif ticker in next_tickers:        # Current price is required for all next tickers but not current
+        open_price = specific_open(ticker, date)
+        if open_price is None and ticker in next_tickers:  # Required for all next tickers (buying) but not current
             raise DataError("Cannot backtest further (unknown buy price for '" + ticker + "').")
-        else:
+        elif open_price is None:
             open_price = recent_open(ticker, date)
 
-        if open_price is None:              # Need at least a price from some time in the past for current tickers
+        if open_price is None:  # Need at least a price from some time in the past for current tickers
             raise DataError("Cannot backtest further (unknown sale price for '" + ticker + "').")
         if ticker in portfolio:
             portfolio_value[ticker] = portfolio[ticker] * float(open_price)
@@ -100,7 +97,7 @@ def compare_weights(current, next_weight):
 
 def buy_sell(portfolio, str_prices, delta, total):
     prices = {ticker: float(price) for ticker, price in str_prices.items()}
-    for holding in delta:           # Buying and selling at the same time is not practical without margin
+    for holding in delta:  # Buying and selling at the same time is not practical without margin
         share_transaction = round((delta[holding] * total) / prices[holding])
         if holding not in portfolio:
             portfolio[holding] = share_transaction
@@ -124,12 +121,11 @@ def rebalance(portfolio, next_weight, date):
     return buy_sell(portfolio, prices, delta, total), total
 
 
-def backtest(cik, min_date, num_stocks, initial_bank):
+def backtest(cik, min_date, max_date, num_stocks, initial_bank):
     if min_date < MIN_13F_DATE:
         print("WARNING/BT: Minimum date " + min_date + " less than global minimum. Using " + MIN_13F_DATE + " instead.")
         min_date = MIN_13F_DATE
-    forms, form_dates = db_get_forms(cik, min_date)
-    db = client.get_database()
+    forms, form_dates = db_get_forms(cik, min_date, max_date)
     total = 0
     trading_dates = {sec_id: next_trading_day(date) for sec_id, date in form_dates.items()}
     to_backtest = sorted(forms)
@@ -140,9 +136,6 @@ def backtest(cik, min_date, num_stocks, initial_bank):
         weights = ensure_valid_data(form, trading_dates[form], trading_dates.get(next_date), cik, num_stocks)
         portfolio, total = rebalance(portfolio, weights, trading_dates[form])
         print("BACKTEST: " + str(portfolio))
-    db.backtest.update_one({'cik': cik},
-                           {'$set': {str(num_stocks):
-                                     {'num_stocks': str(len(portfolio) - 1),
-                                      'min_date': min_date,
-                                      'return': round(((total / initial_bank)-1)*100, 2)}}},
-                           upsert=True)
+    return str(num_stocks), {'num_stocks': str(len(portfolio) - 1),
+                             'min_date': min_date,
+                             'return': round(((total / initial_bank) - 1) * 100, 2)}

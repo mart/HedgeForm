@@ -30,22 +30,11 @@ class Form13F:
         self.gain = False
 
 
-class Holding:
-    def __init__(self, ticker, name, security_type, value, units):
-        self.ticker = ticker
-        self.name = name
-        self.security_type = security_type
-        self.value = value
-        self.units = units
-
-
 class WebScrapeError(RuntimeError):
     pass
 
 
-def check_cusip(cusip):   # For more information, see: https://en.wikipedia.org/wiki/CUSIP
-    if len(cusip) < 9:
-        cusip = '0'*(9 - len(cusip)) + cusip
+def valid_cusip(cusip):   # For more information, see: https://en.wikipedia.org/wiki/CUSIP
     total = 0
     for i in range(len(cusip) - 1):
         if cusip[i].isdigit():
@@ -62,13 +51,14 @@ def check_cusip(cusip):   # For more information, see: https://en.wikipedia.org/
         if i % 2 != 0:  # Odd indices are even digits
             val *= 2
         total += val // 10 + val % 10
-    if (10 - total % 10) % 10 != int(cusip[8]):
-        print('WARNING/ED: CUSIP did not match checksum: ' + cusip)
-    return cusip
+    return (10 - total % 10) % 10 == int(cusip[8])
 
 
 def cusip_to_ticker(cusip):
-    cusip = check_cusip(cusip)
+    if len(cusip) < 9:
+        cusip = '0'*(9 - len(cusip)) + cusip
+    if not valid_cusip(cusip):
+        print('WARNING/ED: CUSIP did not match checksum: ' + cusip)
     cusip_map = db.cusipmap.find_one()
     if cusip not in cusip_map:
         print("WARNING/ED: Could not find '" + cusip + "' in CUSIP mapping. Adding as CUSIP.")
@@ -81,32 +71,30 @@ def aggregate_holdings(holdings):
     out = []
     for security_type in holdings.values():
         out.extend(security_type.values())
-    for holding in out:
-        holding.security_type = holding.security_type.name.title()
-    return [holding.__dict__ for holding in out]
+    return out
 
 
-def get_holdings(link):
-    xml = BeautifulSoup(requests.get(link).content, "xml")
-    print("REQUEST/SEC: 13F filing XML")
+def get_holdings(xml):
     holdings = {SecurityType.SHARE: {}, SecurityType.PUT: {}, SecurityType.CALL: {}}
     for holding in xml("infoTable"):
         ticker = cusip_to_ticker(str(holding.find("cusip").string))
         security_type = SecurityType.SHARE
         if holding.find("putCall") is not None:
-            if str(holding.find("putCall").string) == 'PUT':
+            if str(holding.find("putCall").string).upper() == 'PUT':
                 security_type = SecurityType.PUT
-            elif str(holding.find("putCall").string) == 'CALL':
+            elif str(holding.find("putCall").string).upper() == 'CALL':
                 security_type = SecurityType.CALL
         name = str(holding.find("nameOfIssuer").string).title().replace(" New", "")
         value = int(holding.find("value").string)
         units = int(holding.find("sshPrnamt").string)
 
         if holdings[security_type].get(ticker) is not None:
-            holdings[security_type][ticker].value += value
-            holdings[security_type][ticker].units += units
+            holdings[security_type][ticker]['value'] += value
+            holdings[security_type][ticker]['units'] += units
         else:
-            holdings[security_type][ticker] = Holding(ticker, name, security_type, value, units)
+            holdings[security_type][ticker] = {"ticker": ticker, "name": name,
+                                               "security_type": security_type.name.title(),
+                                               "value": value, "units": units}
     return aggregate_holdings(holdings)
 
 
@@ -114,10 +102,7 @@ def already_in_db(sec_id):
     return db.forms.find_one({'sec_id': sec_id}) is not None
 
 
-def get_link_and_date(filing_link):
-    url = "https://www.sec.gov" + filing_link
-    soup = BeautifulSoup(requests.get(url).content, "html.parser")
-    print("REQUEST/SEC: 13F filing links page " + filing_link)
+def get_link_and_date(soup):
     date_header = soup.select("div.formGrouping > div:nth-of-type(1)")[0].string
     if date_header != "Filing Date":
         raise WebScrapeError("SEC changed their EDGAR format! You'll have to edit the web scraper.")
@@ -148,21 +133,29 @@ def add_filings(cik, filing_links, count, name):
     updated = False
     added = 0
     for filing in filing_links:
+        sec_id = filing.get('href').split("/")[5]
+
         if added == count:
             break
         if '[Amend]' in str(filing.parent.parent):
             continue
-        sec_id = filing.get('href').split("/")[5]
+
         if not already_in_db(sec_id):
-            link, date = get_link_and_date(filing.get("href"))
+            url = "https://www.sec.gov" + filing.get("href")
+            soup = BeautifulSoup(requests.get(url).content, "html.parser")
+            print("REQUEST/ED: 13F filing links page " + url)
+            link, date = get_link_and_date(soup)
             if link is not None:
                 updated = True
-                holdings = get_holdings(link)
+                xml = BeautifulSoup(requests.get(link).content, "xml")
+                print("REQUEST/ED: 13F filing XML")
+                holdings = get_holdings(xml)
                 form = Form13F(cik, sec_id, name, date, link, holdings)
                 db.forms.insert_one(form.__dict__)
                 print("EDGAR: Added form: " + sec_id + " for " + cik)
             else:
                 db.forms.insert_one({'sec_id': sec_id})
+                print("WARNING/ED: Form missing from EDGAR: " + sec_id + " for " + cik)
         added += 1
     return updated
 
@@ -173,7 +166,7 @@ def update_filings(cik, count=20):
     company_url = "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=" + \
                   cik + "&type=13F&dateb=&owner=include&count=" + str(count)
     soup = BeautifulSoup(requests.get(company_url).content, "html.parser")
-    print("REQUEST/SEC: 13F filing company page " + cik)
+    print("REQUEST/ED: 13F filing company page " + cik)
     if soup.select(".companyName"):
         company_string = soup.select(".companyName")[0].text
     else:

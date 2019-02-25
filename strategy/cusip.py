@@ -1,19 +1,15 @@
 import os
-from pymongo import MongoClient
 
 
-def update_cusip_map():
-    client = MongoClient(os.environ['MONGODB_URI'])
-    db = client.get_database()
+def create_cusip_map(directory):
     cusip_map = {}
-    directory = os.environ["TEXT_FILES_DIR"]
-    for filename in sorted(os.listdir(directory)):
+    for filename in os.listdir(directory):
         if filename.endswith(".txt"):
             file = os.path.join(directory, filename)
             # SEC specified ascii but occasional non-ascii appear anyway
             with open(file, encoding="ASCII", errors="ignore") as f:
                 cusip_map.update(parse_fail_filing(f))
-    db.cusipmap.insert_one(cusip_map)
+    return cusip_map
 
 
 def parse_fail_filing(file):
