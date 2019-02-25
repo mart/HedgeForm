@@ -57,6 +57,7 @@ def valid_cusip(cusip):   # For more information, see: https://en.wikipedia.org/
 def cusip_to_ticker(cusip):
     if len(cusip) < 9:
         cusip = '0'*(9 - len(cusip)) + cusip
+    cusip = cusip.upper()
     if not valid_cusip(cusip):
         print('WARNING/ED: CUSIP did not match checksum: ' + cusip)
     cusip_map = db.cusipmap.find_one()
