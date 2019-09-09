@@ -2,7 +2,21 @@
 {% block nav_home %}active{% endblock %}
 {% block content %}
     <div class="container">
-        <h2 class="mt-5">Institutional investors</h2>
+        <div class="container">
+            <div class="card mb-2 mt-4">
+                <div class="card-body">
+                    <h5 class="card-title">Ever wondered what would happen if you tried to copy large hedge funds?</h5>
+                    <p class="card-text">
+                        I don't have the answers, but a rough attempt at a guess is shown in the last column.
+                        It shows the result of copying the top 50 largest stocks from 2014 to present by analysing
+                        the form 13F filings of various companies. The backtest makes a lot of assumptions and doesn't
+                        exactly reflect reality. It may also have bugs*.
+                    </p>
+                </div>
+            </div>
+        </div>
+        <h2 class="mt-5">List of Institutional investors</h2>
+        <h4 class="mb-2">Click a company name to see more details</h4>
         <table id="table13f" class="display nowrap table table-hover table-sm">
             <thead>
             <tr>
