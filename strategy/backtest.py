@@ -14,14 +14,12 @@ def value_to_weight(holdings):
 def db_get_forms(cik, min_date, max_date):
     db = client.get_database()
     forms = db.forms.find({'cik': cik})
-    form_names = []
-    portfolio_date = {}
+    form_dates = {}
     for form13f in forms:
         if form13f['date'] < min_date or form13f['date'] > max_date:
             continue
-        form_names.append(form13f['sec_id'])
-        portfolio_date[form13f['sec_id']] = form13f['date']
-    return form_names, portfolio_date
+        form_dates[form13f['sec_id']] = form13f['date']
+    return form_dates
 
 
 def db_get_form_holdings(form_name, cik):
@@ -125,17 +123,21 @@ def backtest(cik, min_date, max_date, num_stocks, initial_bank):
     if min_date < MIN_13F_DATE:
         print("WARNING/BT: Minimum date " + min_date + " less than global minimum. Using " + MIN_13F_DATE + " instead.")
         min_date = MIN_13F_DATE
-    forms, form_dates = db_get_forms(cik, min_date, max_date)
-    total = 0
+    form_dates = db_get_forms(cik, min_date, max_date)
+
     trading_dates = {sec_id: next_trading_day(date) for sec_id, date in form_dates.items()}
-    to_backtest = sorted(forms)
     portfolio = {"cash": initial_bank}
-    for form in to_backtest:
-        next_date_index = to_backtest.index(form) + 1
-        next_date = to_backtest[next_date_index] if len(to_backtest) > next_date_index else None
-        weights = ensure_valid_data(form, trading_dates[form], trading_dates.get(next_date), cik, num_stocks)
-        portfolio, total = rebalance(portfolio, weights, trading_dates[form])
+    to_backtest = list(sorted(trading_dates.items(), key=lambda item: item[1]))
+    next_date_index = 0
+    running_balance = 0
+
+    for formID, date in to_backtest:
+        next_date_index += 1
+        next_date = to_backtest[next_date_index][1] if len(to_backtest) > next_date_index else None
+        weights = ensure_valid_data(formID, date, trading_dates.get(next_date), cik, num_stocks)
+        portfolio, running_balance = rebalance(portfolio, weights, trading_dates[formID])
         print("BACKTEST: " + str(portfolio))
+
     return str(num_stocks), {'num_stocks': str(len(portfolio) - 1),
                              'min_date': min_date,
-                             'return': round(((total / initial_bank) - 1) * 100, 2)}
+                             'return': round(((running_balance / initial_bank) - 1) * 100, 2)}

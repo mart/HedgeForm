@@ -8,7 +8,7 @@ sd.get_data('SHPG', '2019-02-11')
 
 
 def test_specific_open():
-    assert sd.specific_open('AAPL', '2019-02-11') == approx(171.05)
+    assert sd.specific_open('AMZN', '2019-07-29') == approx(1930)
 
 
 def test_specific_open_fail():

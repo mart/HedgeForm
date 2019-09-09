@@ -16,19 +16,15 @@ def test_value_to_weight():
 
 
 def test_db_get_forms_two_old():
-    form_names = ['000108514614001202', '000108514614000711']
-    portfolio_date = {'000108514614001202': '2014-05-15', '000108514614000711': '2014-02-14'}
+    form_dates = {'000108514614001202': '2014-05-15', '000108514614000711': '2014-02-14'}
     result = bt.db_get_forms("0001040273", '2014-01-01', '2014-06-01')
-    assert result[0] == form_names
-    assert result[1] == portfolio_date
+    assert result == form_dates
 
 
 def test_db_get_forms_one_new():
-    form_names = ['000108514619000438']
-    portfolio_date = {'000108514619000438': '2019-02-08'}
+    form_dates = {'000108514619000438': '2019-02-08'}
     result = bt.db_get_forms("0001040273", '2019-01-01', '2019-03-01')
-    assert result[0] == form_names
-    assert result[1] == portfolio_date
+    assert result == form_dates
 
 
 def test_db_get_form_holdings():
@@ -90,28 +86,6 @@ def test_ensure_valid_data():
     expected_weights = bt.value_to_weight(trimmed)
     weights = bt.ensure_valid_data('000108514619000438', '2019-02-11', None, "0001040273", 15)
     assert weights == expected_weights
-
-
-def test_get_values():
-    date = '2019-02-11'
-    portfolio_value = {"cash": 1, "AAPL": 8552.5, "WMT": 1913.0, "BA": 8978.2, "AIG": 597.38}
-    prices = {"AAPL": 171.05, "AIG": 42.67, "BA": 408.10, "WMT": 95.65, 'cash': 1}
-    portfolio = {"AAPL": 50, "WMT": 20, "BA": 22, "AIG": 14, "cash": 1}
-    sd.get_data(portfolio.keys(), date)
-    result = bt.get_values(portfolio, {}, date)
-    assert result[0] == approx(portfolio_value, abs=1e-15)
-    assert result[1] == approx(prices, abs=1e-15)
-
-
-def test_get_values_rebalance():
-    date = '2019-02-11'
-    portfolio_value = {"cash": 1, "AAPL": 8552.5, "WMT": 1913.0, "BA": 8978.2, "AIG": 597.38}
-    prices = {"AAPL": 171.05, "AIG": 42.67, "BA": 408.10, "WMT": 95.65, 'cash': 1}
-    portfolio = {"AAPL": 50, "WMT": 20, "BA": 22, "AIG": 14, "cash": 1}
-    sd.get_data(portfolio.keys(), date)
-    result = bt.get_values(portfolio, {"AAPL": 1.0}, date)
-    assert result[0] == approx(portfolio_value, abs=1e-15)
-    assert result[1] == approx(prices, abs=1e-15)
 
 
 def test_get_values_missing_sell():
@@ -195,7 +169,7 @@ def test_backtest_nine():
 def test_backtest_five():
     expected_backtest = {"num_stocks": "5",
                          "min_date": '2018-08-01',
-                         'return': -4.93}
+                         'return': -4.92}
     num, backtest = bt.backtest("0001040273", '2018-08-01', '2019-02-08', 5, 100000)
     assert num == "5"
     assert backtest == expected_backtest
